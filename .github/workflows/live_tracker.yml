@@ -1,0 +1,51 @@
+name: Branch Live Tracker
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "auto = send WhatsApp | dry_run = print only"
+        type: choice
+        options: [auto, dry_run]
+        default: auto
+      backfill_hours:
+        description: "First run only: also send items from the last N hours"
+        required: false
+        default: "3"
+  schedule:
+    - cron: "*/5 * * * *"   # fallback; the github alarm Apps Script is the main trigger
+
+permissions:
+  contents: write          # to commit state/seen.json
+
+concurrency:
+  group: branch-live-tracker
+  cancel-in-progress: false
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Run one pass
+        env:
+          ZENPUT_API_KEY:     ${{ secrets.ZENPUT_API_KEY }}
+          WA_TOKEN:           ${{ secrets.WA_TOKEN }}
+          WA_PHONE_NUMBER_ID: ${{ secrets.WA_PHONE_NUMBER_ID }}
+          WA_TEST_PHONE:      ${{ secrets.WA_TEST_PHONE }}
+          MODE:               ${{ inputs.mode || 'auto' }}
+          BACKFILL_HOURS:     ${{ inputs.backfill_hours || '3' }}
+          DAILY_HOUR:         "9"
+          RUN_MINUTES:        "0"
+        run: python live_tracker.py
